@@ -24,6 +24,6 @@ jobs:
     - name: Install Dependencies
       run: composer update
     - name: Unit Tests
-      run: phpunit --verbose --coverage-clover build/logs/clover.xml
+      run: ./vendor/bin/phpunit --verbose --coverage-clover build/logs/clover.xml
     - name: Testing Coding Styling Compliance (PSR)
-      run: php-cs-fixer fix ./ -vv --dry-run
+      run: ./vendor/bin/php-cs-fixer fix ./ -vv --dry-run
