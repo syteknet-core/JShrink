@@ -25,5 +25,3 @@ jobs:
       run: composer update
     - name: Unit Tests
       run: ./vendor/bin/phpunit --verbose --coverage-clover build/logs/clover.xml
-    - name: Testing Coding Styling Compliance (PSR)
-      run: ./vendor/bin/php-cs-fixer fix ./ -vv --dry-run
