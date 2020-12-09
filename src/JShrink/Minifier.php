@@ -1,7 +1,4 @@
 <?php
-
-declare(strict_types=1);
-
 /*
  * This file is part of the JShrink package.
  *
@@ -35,93 +32,102 @@ namespace JShrink;
 class Minifier
 {
     /**
-     * Contains the default options for minification. This array is merged with
-     * the one passed in by the user to create the request specific set of
-     * options (stored in the $options attribute).
+     * The input javascript to be minified.
      *
-     * @var bool[]
+     * @var string
      */
-    protected static array $defaultOptions = ['flaggedComments' => true];
+    protected $input;
 
-    /** The input javascript to be minified. */
-    protected string $input;
+    /**
+     * Length of input javascript.
+     *
+     * @var int
+     */
+    protected $len = 0;
 
-    /** Length of input javascript. */
-    protected int $len = 0;
+    /**
+     * The location of the character (in the input string) that is next to be
+     * processed.
+     *
+     * @var int
+     */
+    protected $index = 0;
 
-    /** The location of the character (in the input string) that is next to be processed. */
-    protected int $index = 0;
+    /**
+     * The first of the characters currently being looked at.
+     *
+     * @var string
+     */
+    protected $a = '';
 
-    /** The first of the characters currently being looked at. */
-    protected ?string $a = '';
+    /**
+     * The next character being looked at (after a);
+     *
+     * @var string
+     */
+    protected $b = '';
 
-    /** The next character being looked at (after a); */
-    protected ?string $b = '';
-
-    /** This character is only active when certain look ahead actions take place. */
-    protected ?string $c;
+    /**
+     * This character is only active when certain look ahead actions take place.
+     *
+     *  @var string
+     */
+    protected $c;
 
     /**
      * Contains the options for the current minification process.
      *
-     * @var mixed[]
+     * @var array
      */
-    protected array $options;
+    protected $options;
 
     /**
      * These characters are used to define strings.
-     *
-     * @var bool[]
      */
-    protected array $stringDelimiters = ['\'' => true, '"' => true, '`' => true];
+    protected $stringDelimiters = ['\'' => true, '"' => true, '`' => true];
+
+    /**
+     * Contains the default options for minification. This array is merged with
+     * the one passed in by the user to create the request specific set of
+     * options (stored in the $options attribute).
+     *
+     * @var array
+     */
+    protected static $defaultOptions = ['flaggedComments' => true];
 
     /**
      * Contains lock ids which are used to replace certain code patterns and
      * prevent them from being minified
      *
-     * @var mixed[]
+     * @var array
      */
-    protected array $locks = [];
-
-    /**
-     * Characters that can't stand alone preserve the newline.
-     *
-     * @var bool[]
-     */
-    protected array $noNewLineCharacters = [
-        '(' => true,
-        '-' => true,
-        '+' => true,
-        '[' => true,
-        '@' => true,
-    ];
-
+    protected $locks = [];
 
     /**
      * Takes a string containing javascript and removes unneeded characters in
      * order to shrink the code without altering it's functionality.
      *
-     * @param string $js The raw javascript to be minified
-     * @param mixed[] $options Various runtime options in an associative array
-     * @throws \Throwable
+     * @param  string      $js      The raw javascript to be minified
+     * @param  array       $options Various runtime options in an associative array
+     * @throws \Exception
+     * @return bool|string
      */
-    public static function minify(string $js, array $options = []): ?string
+    public static function minify($js, $options = [])
     {
-        $jshrink = null;
         try {
             ob_start();
 
-            $jshrink = new self;
+            $jshrink = new Minifier();
             $js = $jshrink->lock($js);
             $jshrink->minifyDirectToOutput($js, $options);
 
             // Sometimes there's a leading new line, so we trim that out here.
-            $js = ltrim((string) ob_get_clean());
+            $js = ltrim(ob_get_clean());
             $js = $jshrink->unlock($js);
             unset($jshrink);
 
             return $js;
-        } catch (\Throwable $e) {
+        } catch (\Exception $e) {
             if (isset($jshrink)) {
                 // Since the breakdownScript function probably wasn't finished
                 // we clean it out before discarding it.
@@ -135,43 +141,30 @@ class Minifier
         }
     }
 
-
-    /**
-     * Checks to see if a character is alphanumeric.
-     *
-     * @param string $char Just one character
-     */
-    protected static function isAlphaNumeric(string $char): bool
-    {
-        return $char === '/' || preg_match('/^[\w\$\pL]$/u', $char) === 1;
-    }
-
-
     /**
      * Processes a javascript string and outputs only the required characters,
      * stripping out all unneeded characters.
      *
-     * @param string $js The raw javascript to be minified
-     * @param mixed[] $options Various runtime options in an associative array
+     * @param string $js      The raw javascript to be minified
+     * @param array  $options Various runtime options in an associative array
      */
-    protected function minifyDirectToOutput(string $js, array $options): void
+    protected function minifyDirectToOutput($js, $options)
     {
         $this->initialize($js, $options);
         $this->loop();
         $this->clean();
     }
 
-
     /**
      *  Initializes internal variables, normalizes new lines,
      *
-     * @param string $js The raw javascript to be minified
-     * @param mixed[] $options Various runtime options in an associative array
+     * @param string $js      The raw javascript to be minified
+     * @param array  $options Various runtime options in an associative array
      */
-    protected function initialize(string $js, array $options): void
+    protected function initialize($js, $options)
     {
         $this->options = array_merge(static::$defaultOptions, $options);
-        $this->input = str_replace(["\r\n", '/**/', "\r"], ["\n", '', "\n"], $js);
+        $this->input = str_replace(["\r\n", '/**/', "\r"], ["\n", "", "\n"], $js);
 
         // We add a newline to the end of the script to make it easier to deal
         // with comments at the bottom of the script- this prevents the unclosed
@@ -187,19 +180,30 @@ class Minifier
         $this->b = $this->getReal();
     }
 
+    /**
+     * Characters that can't stand alone preserve the newline.
+     *
+     * @var array
+     */
+    protected $noNewLineCharacters = [
+        '(' => true,
+        '-' => true,
+        '+' => true,
+        '[' => true,
+        '@' => true];
 
     /**
      * The primary action occurs here. This function loops through the input string,
      * outputting anything that's relevant and discarding anything that is not.
      */
-    protected function loop(): void
+    protected function loop()
     {
-        while ($this->a !== null && !is_null($this->a) && $this->a !== '') {
+        while ($this->a !== false && !is_null($this->a) && $this->a !== '') {
             switch ($this->a) {
                 // new lines
                 case "\n":
                     // if the next line is something that can't stand alone preserve the newline
-                    if ($this->b !== null && isset($this->noNewLineCharacters[$this->b])) {
+                    if ($this->b !== false && isset($this->noNewLineCharacters[$this->b])) {
                         echo $this->a;
                         $this->saveString();
                         break;
@@ -215,7 +219,7 @@ class Minifier
 
                 // no break
                 case ' ':
-                    if (static::isAlphaNumeric((string) $this->b)) {
+                    if (static::isAlphaNumeric($this->b)) {
                         echo $this->a;
                     }
 
@@ -229,10 +233,11 @@ class Minifier
                                 echo $this->a;
                                 $this->saveString();
                                 break;
-                            }
-                            if (static::isAlphaNumeric($this->a)) {
-                                echo $this->a;
-                                $this->saveString();
+                            } else {
+                                if (static::isAlphaNumeric($this->a)) {
+                                    echo $this->a;
+                                    $this->saveString();
+                                }
                             }
                             break;
 
@@ -258,30 +263,33 @@ class Minifier
             // do reg check of doom
             $this->b = $this->getReal();
 
-            if (($this->b === '/' && strpos('(,=:[!&|?', (string) $this->a) !== false)) {
+            if (($this->b == '/' && strpos('(,=:[!&|?', $this->a) !== false)) {
                 $this->saveRegex();
             }
         }
     }
-
 
     /**
      * Resets attributes that do not need to be stored between requests so that
      * the next request is ready to go. Another reason for this is to make sure
      * the variables are cleared and are not taking up memory.
      */
-    protected function clean(): void
+    protected function clean()
     {
         unset($this->input);
         $this->len = 0;
         $this->index = 0;
         $this->a = $this->b = '';
-        unset($this->c, $this->options);
+        unset($this->c);
+        unset($this->options);
     }
 
-
-    /** Returns the next string for processing based off of the current index. */
-    protected function getChar(): ?string
+    /**
+     * Returns the next string for processing based off of the current index.
+     *
+     * @return string
+     */
+    protected function getChar()
     {
         // Check to see if we had anything in the look ahead buffer and use that.
         if (isset($this->c)) {
@@ -291,9 +299,9 @@ class Minifier
             // Otherwise we start pulling from the input.
             $char = $this->index < $this->len ? $this->input[$this->index] : false;
 
-            // If the next character doesn't exist return null.
-            if ($char === false) {
-                return null;
+            // If the next character doesn't exist return false.
+            if (isset($char) && $char === false) {
+                return false;
             }
 
             // Otherwise increment the pointer and use this char.
@@ -309,7 +317,6 @@ class Minifier
         return $char;
     }
 
-
     /**
      * This function gets the next "real" character. It is essentially a wrapper
      * around the getChar function that skips comments. This has significant
@@ -320,7 +327,7 @@ class Minifier
      * @return string            Next 'real' character to be processed.
      * @throws \RuntimeException
      */
-    protected function getReal(): ?string
+    protected function getReal()
     {
         $startIndex = $this->index;
         $char = $this->getChar();
@@ -336,8 +343,7 @@ class Minifier
             $this->processOneLineComments($startIndex);
 
             return $this->getReal();
-        }
-        if ($this->c === '*') {
+        } elseif ($this->c === '*') {
             $this->processMultiLineComments($startIndex);
 
             return $this->getReal();
@@ -346,49 +352,49 @@ class Minifier
         return $char;
     }
 
-
     /**
      * Removed one line comments, with the exception of some very specific types of
      * conditional comments.
      *
-     * @param int $startIndex The index point where "getReal" function started
+     * @param  int  $startIndex The index point where "getReal" function started
+     * @return void
      */
-    protected function processOneLineComments(int $startIndex): void
+    protected function processOneLineComments($startIndex)
     {
-        $thirdCommentString = $this->index < $this->len ? $this->input[$this->index] : null;
+        $thirdCommentString = $this->index < $this->len ? $this->input[$this->index] : false;
 
         // kill rest of line
         $this->getNext("\n");
 
         unset($this->c);
 
-        if ($thirdCommentString === '@') {
+        if ($thirdCommentString == '@') {
             $endPoint = $this->index - $startIndex;
             $this->c = "\n" . substr($this->input, $startIndex, $endPoint);
         }
     }
 
-
     /**
      * Skips multiline comments where appropriate, and includes them where needed.
      * Conditional comments and "license" style blocks are preserved.
      *
-     * @param int $startIndex The index point where "getReal" function started
+     * @param  int               $startIndex The index point where "getReal" function started
+     * @return void
      * @throws \RuntimeException Unclosed comments will throw an error
      */
-    protected function processMultiLineComments(int $startIndex): void
+    protected function processMultiLineComments($startIndex)
     {
         $this->getChar(); // current C
         $thirdCommentString = $this->getChar();
 
         // kill everything up to the next */ if it's there
-        if ($this->getNext('*/') !== null) {
+        if ($this->getNext('*/')) {
             $this->getChar(); // get *
             $this->getChar(); // get /
             $char = $this->getChar(); // get next real character
 
             // Now we reinsert conditional comments and YUI-style licensing comments
-            if ((((bool) $this->options['flaggedComments']) === true && $thirdCommentString === '!')
+            if (($this->options['flaggedComments'] && $thirdCommentString === '!')
                 || ($thirdCommentString === '@')) {
 
                 // If conditional comments or flagged comments are not the first thing in the script
@@ -411,10 +417,10 @@ class Minifier
                 return;
             }
         } else {
-            $char = null;
+            $char = false;
         }
 
-        if ($char === null) {
+        if ($char === false) {
             throw new \RuntimeException('Unclosed multiline comment at position: ' . ($this->index - 2));
         }
 
@@ -422,32 +428,30 @@ class Minifier
         $this->c = $char;
     }
 
-
     /**
      * Pushes the index ahead to the next instance of the supplied string. If it
      * is found the first character of the string is returned and the index is set
      * to it's position.
      *
-     * @param string $string
-     * @return string|null Returns the first character of the string or null.
+     * @param  string       $string
+     * @return string|false Returns the first character of the string or false.
      */
-    protected function getNext(string $string): ?string
+    protected function getNext($string)
     {
         // Find the next occurrence of "string" after the current position.
         $pos = strpos($this->input, $string, $this->index);
 
-        // If it's not there return null.
+        // If it's not there return false.
         if ($pos === false) {
-            return null;
+            return false;
         }
 
         // Adjust position of index to jump ahead to the asked for string
         $this->index = $pos;
 
         // Return the first character of that string.
-        return $this->index < $this->len ? $this->input[$this->index] : null;
+        return $this->index < $this->len ? $this->input[$this->index] : false;
     }
-
 
     /**
      * When a javascript string is detected this function crawls for the end of
@@ -455,7 +459,7 @@ class Minifier
      *
      * @throws \RuntimeException Unclosed strings will throw an error
      */
-    protected function saveString(): void
+    protected function saveString()
     {
         $startpos = $this->index;
 
@@ -476,7 +480,7 @@ class Minifier
 
         // Loop until the string is done
         // Grab the very next character and load it into a
-        while (($this->a = $this->getChar()) !== null) {
+        while (($this->a = $this->getChar()) !== false) {
             switch ($this->a) {
 
                 // If the string opener (single or double quote) is used
@@ -523,18 +527,17 @@ class Minifier
         }
     }
 
-
     /**
      * When a regular expression is detected this function crawls for the end of
      * it and saves the whole regex.
      *
      * @throws \RuntimeException Unclosed regex will throw an error
      */
-    protected function saveRegex(): void
+    protected function saveRegex()
     {
         echo $this->a . $this->b;
 
-        while (($this->a = $this->getChar()) !== null) {
+        while (($this->a = $this->getChar()) !== false) {
             if ($this->a === '/') {
                 break;
             }
@@ -553,39 +556,51 @@ class Minifier
         $this->b = $this->getReal();
     }
 
+    /**
+     * Checks to see if a character is alphanumeric.
+     *
+     * @param  string $char Just one character
+     * @return bool
+     */
+    protected static function isAlphaNumeric($char)
+    {
+        return preg_match('/^[\w\$\pL]$/', $char) === 1 || $char == '/';
+    }
 
     /**
      * Replace patterns in the given string and store the replacement
      *
-     * @param string $js The string to lock
+     * @param  string $js The string to lock
+     * @return bool
      */
-    protected function lock(string $js): string
+    protected function lock($js)
     {
         /* lock things like <code>"asd" + ++x;</code> */
-        $lock = '"LOCK---' . crc32((string) time()) . '"';
+        $lock = '"LOCK---' . crc32(time()) . '"';
 
-        if (preg_match('/([+-])(\s+)([+-])/S', $js, $matches) === 0) {
+        $matches = [];
+        preg_match('/([+-])(\s+)([+-])/S', $js, $matches);
+        if (empty($matches)) {
             return $js;
         }
 
         $this->locks[$lock] = $matches[2];
 
-        $js = (string) preg_replace('/([+-])\s+([+-])/S', '$1' . $lock . '$2', $js);
-
+        $js = preg_replace('/([+-])\s+([+-])/S', "$1{$lock}$2", $js);
         /* -- */
 
         return $js;
     }
 
-
     /**
      * Replace "locks" with the original characters
      *
-     * @param string $js The string to unlock
+     * @param  string $js The string to unlock
+     * @return bool
      */
-    protected function unlock(string $js): string
+    protected function unlock($js)
     {
-        if ($this->locks === []) {
+        if (empty($this->locks)) {
             return $js;
         }
 
