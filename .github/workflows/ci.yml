@@ -1,0 +1,30 @@
+jobs:
+  run:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ubuntu-latest]
+        php-versions: ['7.0', '7.1', '7.2', '7.3', '7.4', '8.0']
+    name: PHP ${{ matrix.php-versions }} Test on ${{ matrix.operating-system }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-versions }}
+        extensions: mbstring, intl
+        ini-values: post_max_size=256M, max_execution_time=180
+        coverage: xdebug        
+        tools: php-cs-fixer, phpunit
+    - name: Install Dependencies
+      run: (test -f vendor && true ) || composer update --prefer-lowest --no-progress --ansi --no-interaction --prefer-dist
+      if: matrix.composer == 'lowest'
+    - name: Install Dependencies
+      run: (test -f vendor && true ) || composer install --ansi --no-progress --no-interaction --prefer-dist
+      if: matrix.composer == 'current'
+    - name: Install Dependencies
+      run: (test -f vendor && true ) || composer update --ansi --no-progress --no-interaction --prefer-dist
+      if: matrix.composer == 'highest'
+    - name: Run Tests
+      run: ./tests/runTests.sh
