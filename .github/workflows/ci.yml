@@ -22,7 +22,7 @@ jobs:
         coverage: xdebug        
         tools: php-cs-fixer, phpunit
     - name: Install Dependencies
-      run: composer install
+      run: composer update
     - name: Unit Tests
       run: phpunit --verbose --coverage-clover build/logs/clover.xml
     - name: Testing Coding Styling Compliance (PSR)
